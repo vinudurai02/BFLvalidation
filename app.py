@@ -6,23 +6,20 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 app = Flask(__name__)
 
-# Step 1: Load and parse credentials from Render environment variable
+# Get raw JSON string from environment
 cred_json = os.environ.get("GOOGLE_SHEET_CREDENTIALS")
 
-if not cred_json:
-    raise ValueError("Missing GOOGLE_SHEET_CREDENTIALS environment variable")
-
+# Parse string into dictionary (this is critical!)
 try:
-    # Step 2: Convert the JSON string into a dictionary
     cred_dict = json.loads(cred_json)
 except Exception as e:
-    raise ValueError(f"Could not parse GOOGLE_SHEET_CREDENTIALS: {str(e)}")
+    raise ValueError(f"Error parsing GOOGLE_SHEET_CREDENTIALS: {str(e)}")
 
-# Step 3: Define the scope and connect to Google Sheets
+# Authorize Google Sheets API
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(cred_dict, scope)
 client = gspread.authorize(creds)
-sheet = client.open("Pillow Serial Numbers").sheet1  # Make sure this name matches your actual sheet
+sheet = client.open("Pillow Serial Numbers").sheet1
 
 # Step 4: Create a POST endpoint to validate serial numbers
 @app.route('/ValidateSrNo', methods=['POST'])
