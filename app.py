@@ -21,13 +21,11 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(cred_dict, scope)
 client = gspread.authorize(creds)
 sheet = client.open("Validation-test").sheet1
 
-# Step 4: Create a POST endpoint to validate serial numbers
 @app.route('/ValidateSrNo', methods=['POST'])
 def validate_serial():
     try:
         data = request.get_json()
 
-        # Check if all required fields are present
         required_fields = ["materialCode", "serialNumber", "dealerCode", "accessKey"]
         if not all(field in data for field in required_fields):
             return jsonify(responseStatus="-99", responseMessage="Missing required fields")
@@ -36,10 +34,9 @@ def validate_serial():
         material = data["materialCode"]
         dealer = data["dealerCode"]
 
-        # Read all records from Google Sheet
         rows = sheet.get_all_records()
 
-        for row in rows:
+        for index, row in enumerate(rows):
             if row["serialNumber"] == serial:
                 if row["materialCode"] != material:
                     return jsonify(responseStatus="-2", responseMessage="Mismatch in model and serial number")
@@ -48,17 +45,19 @@ def validate_serial():
                 if row["isValidated"].lower() == "yes":
                     return jsonify(responseStatus="-3", responseMessage="Serial Number Already Validated")
 
+                # ✅ Mark this serial number as validated in the sheet
+                cell_row = index + 2  # +2 because Google Sheets is 1-indexed and row 1 is headers
+                sheet.update_cell(cell_row, 4, "Yes")  # Column 4 is "isValidated"
+
                 return jsonify(responseStatus="0", responseMessage="Valid Serial Number")
 
         return jsonify(responseStatus="-1", responseMessage="Invalid Serial Number")
     except Exception as e:
         return jsonify(responseStatus="-500", responseMessage=f"Internal Error: {str(e)}")
 
-# Step 5: Default homepage to test if API is running
 @app.route('/')
 def home():
-    return "🎉 EMI API is live!"
+    return "🎉EMI API is live!"
 
-# Step 6: Run locally only if this file is executed directly
 if __name__ == '__main__':
     app.run(debug=True)
