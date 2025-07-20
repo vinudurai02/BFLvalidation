@@ -19,7 +19,7 @@ except Exception as e:
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(cred_dict, scope)
 client = gspread.authorize(creds)
-sheet = client.open("Pillow Serial Numbers").sheet1
+sheet = client.open("Validation-test").sheet1
 
 # Step 4: Create a POST endpoint to validate serial numbers
 @app.route('/ValidateSrNo', methods=['POST'])
@@ -57,7 +57,7 @@ def validate_serial():
 # Step 5: Default homepage to test if API is running
 @app.route('/')
 def home():
-    return "🎉 Pillow EMI API is live!"
+    return "🎉 EMI API is live!"
 
 # Step 6: Run locally only if this file is executed directly
 if __name__ == '__main__':
