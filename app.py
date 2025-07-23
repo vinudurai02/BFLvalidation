@@ -1,22 +1,22 @@
 import os
 import json
-import time
 from flask import Flask, request, jsonify
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from itsdangerous import TimedJSONWebSignatureSerializer as Serializer, BadSignature, SignatureExpired
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
+# === Flask Setup ===
 app = Flask(__name__)
-app.secret_key = os.environ.get("API_SECRET_KEY", "supersecretkey123")  # Keep it safe!
+app.secret_key = os.environ.get("API_SECRET_KEY", "supersecretkey123")  # Keep secret in env
 
-# Setup token serializer (token lasts for 600 seconds = 10 minutes)
-serializer = Serializer(app.secret_key, expires_in=600)
+# === Token Serializer ===
+serializer = URLSafeTimedSerializer(app.secret_key)
 
-# BFL login credentials (set in env variables or hardcoded for now)
+# === BFL Credentials ===
 VALID_USERNAME = os.environ.get("BFL_USERNAME", "bfluser")
 VALID_PASSWORD = os.environ.get("BFL_PASSWORD", "bflpass")
 
-# Load Google Sheet
+# === Connect to Google Sheets ===
 cred_json = os.environ.get("GOOGLE_SHEET_CREDENTIALS")
 cred_dict = json.loads(cred_json)
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -24,37 +24,36 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(cred_dict, scope)
 client = gspread.authorize(creds)
 sheet = client.open("Pillow Serial Numbers").sheet1
 
+# === Home Test ===
 @app.route('/')
 def home():
     return "🎉 Pillow EMI API is live with token authentication!"
 
+# === Generate Token API ===
 @app.route('/generateToken', methods=['POST'])
 def generate_token():
-    auth = request.get_json()
-    if not auth or "username" not in auth or "password" not in auth:
+    data = request.get_json()
+    if not data or "username" not in data or "password" not in data:
         return jsonify({"error": "Missing username or password"}), 400
 
-    username = auth["username"]
-    password = auth["password"]
-
-    if username == VALID_USERNAME and password == VALID_PASSWORD:
-        token = serializer.dumps({"user": username}).decode("utf-8")
+    if data["username"] == VALID_USERNAME and data["password"] == VALID_PASSWORD:
+        token = serializer.dumps({"user": data["username"]})
         return jsonify({"token": token, "expiresInSeconds": 600})
     else:
         return jsonify({"error": "Invalid credentials"}), 401
 
+# === Token Verification ===
 def verify_token(token):
     try:
-        data = serializer.loads(token)
+        serializer.loads(token, max_age=600)  # 10 minutes expiry
         return True
-    except SignatureExpired:
-        return False
-    except BadSignature:
+    except (BadSignature, SignatureExpired):
         return False
 
+# === Validate Serial Number API ===
 @app.route('/ValidateSrNo', methods=['POST'])
 def validate_serial():
-    # Step 1: Check for token
+    # 1. Check for Token
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         return jsonify(responseStatus="-403", responseMessage="Missing or invalid token")
@@ -63,7 +62,7 @@ def validate_serial():
     if not verify_token(token):
         return jsonify(responseStatus="-403", responseMessage="Token expired or invalid")
 
-    # Step 2: Business logic
+    # 2. Main Logic
     try:
         data = request.get_json()
         required_fields = ["materialCode", "serialNumber", "dealerCode", "accessKey"]
@@ -86,5 +85,6 @@ def validate_serial():
                 return jsonify(responseStatus="0", responseMessage="Valid Serial Number")
 
         return jsonify(responseStatus="-1", responseMessage="Invalid Serial Number")
+
     except Exception as e:
         return jsonify(responseStatus="-500", responseMessage=f"Internal Error: {str(e)}")
