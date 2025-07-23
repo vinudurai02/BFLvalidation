@@ -22,12 +22,12 @@ cred_dict = json.loads(cred_json)
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(cred_dict, scope)
 client = gspread.authorize(creds)
-sheet = client.open("Pillow Serial Numbers").sheet1
+sheet = client.open("SI-SR-Validation").sheet1
 
 # === Home Test ===
 @app.route('/')
 def home():
-    return "🎉 Pillow EMI API is live with token authentication!"
+    return "🎉 EMI API is live with token authentication!"
 
 # === Generate Token API ===
 @app.route('/generateToken', methods=['POST'])
