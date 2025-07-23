@@ -4,10 +4,11 @@ from flask import Flask, request, jsonify
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from datetime import datetime  # ✅ For timestamp
 
 # === Flask Setup ===
 app = Flask(__name__)
-app.secret_key = os.environ.get("API_SECRET_KEY", "supersecretkey123")  # Keep secret in env
+app.secret_key = os.environ.get("API_SECRET_KEY", "supersecretkey123")
 
 # === Token Serializer ===
 serializer = URLSafeTimedSerializer(app.secret_key)
@@ -22,14 +23,12 @@ cred_dict = json.loads(cred_json)
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(cred_dict, scope)
 client = gspread.authorize(creds)
-sheet = client.open("SI-SR-Validation").sheet1
+sheet = client.open("SI-SR-Validation").sheet1  # ✅ Sheet name updated
 
-# === Home Test ===
 @app.route('/')
 def home():
-    return "🎉 EMI API is live with token authentication!"
+    return "🎉 Pillow EMI API is live with token authentication and timestamp logging!"
 
-# === Generate Token API ===
 @app.route('/generateToken', methods=['POST'])
 def generate_token():
     data = request.get_json()
@@ -42,7 +41,6 @@ def generate_token():
     else:
         return jsonify({"error": "Invalid credentials"}), 401
 
-# === Token Verification ===
 def verify_token(token):
     try:
         serializer.loads(token, max_age=600)  # 10 minutes expiry
@@ -50,10 +48,9 @@ def verify_token(token):
     except (BadSignature, SignatureExpired):
         return False
 
-# === Validate Serial Number API ===
 @app.route('/ValidateSrNo', methods=['POST'])
 def validate_serial():
-    # 1. Check for Token
+    # 1. Check for token
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         return jsonify(responseStatus="-403", responseMessage="Missing or invalid token")
@@ -62,7 +59,6 @@ def validate_serial():
     if not verify_token(token):
         return jsonify(responseStatus="-403", responseMessage="Token expired or invalid")
 
-    # 2. Main Logic
     try:
         data = request.get_json()
         required_fields = ["materialCode", "serialNumber", "dealerCode", "accessKey"]
@@ -74,6 +70,7 @@ def validate_serial():
         dealer = data["dealerCode"]
 
         rows = sheet.get_all_records()
+
         for row in rows:
             if row["serialNumber"] == serial:
                 if row["materialCode"] != material:
@@ -82,6 +79,16 @@ def validate_serial():
                     return jsonify(responseStatus="-6", responseMessage="Serial number is not billed to this Dealer")
                 if row["isValidated"].lower() == "yes":
                     return jsonify(responseStatus="-3", responseMessage="Serial Number Already Validated")
+
+                # ✅ Update the sheet with Yes and timestamp
+                try:
+                    row_index = rows.index(row) + 2  # +2 because gspread is 1-based and first row is header
+                    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    sheet.update_cell(row_index, 4, "Yes")           # isValidated
+                    sheet.update_cell(row_index, 5, current_time)    # validatedAt
+                except Exception as e:
+                    print("Sheet update error:", e)
+
                 return jsonify(responseStatus="0", responseMessage="Valid Serial Number")
 
         return jsonify(responseStatus="-1", responseMessage="Invalid Serial Number")
