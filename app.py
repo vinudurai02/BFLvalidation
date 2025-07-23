@@ -4,30 +4,27 @@ from flask import Flask, request, jsonify
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from datetime import datetime  # ✅ For timestamp
+from datetime import datetime
 
-# === Flask Setup ===
 app = Flask(__name__)
 app.secret_key = os.environ.get("API_SECRET_KEY", "supersecretkey123")
-
-# === Token Serializer ===
 serializer = URLSafeTimedSerializer(app.secret_key)
 
-# === BFL Credentials ===
+# BFL login
 VALID_USERNAME = os.environ.get("BFL_USERNAME", "bfluser")
 VALID_PASSWORD = os.environ.get("BFL_PASSWORD", "bflpass")
 
-# === Connect to Google Sheets ===
+# Connect to Google Sheet
 cred_json = os.environ.get("GOOGLE_SHEET_CREDENTIALS")
 cred_dict = json.loads(cred_json)
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(cred_dict, scope)
 client = gspread.authorize(creds)
-sheet = client.open("SI-SR-Validation").sheet1  # ✅ Sheet name updated
+sheet = client.open("SI-SR-Validation").sheet1
 
 @app.route('/')
 def home():
-    return "🎉 Pillow EMI API is live with token authentication and timestamp logging!"
+    return "🎉 Pillow EMI Serial Checker is live!"
 
 @app.route('/generateToken', methods=['POST'])
 def generate_token():
@@ -43,14 +40,13 @@ def generate_token():
 
 def verify_token(token):
     try:
-        serializer.loads(token, max_age=600)  # 10 minutes expiry
+        serializer.loads(token, max_age=600)
         return True
     except (BadSignature, SignatureExpired):
         return False
 
 @app.route('/ValidateSrNo', methods=['POST'])
 def validate_serial():
-    # 1. Check for token
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         return jsonify(responseStatus="-403", responseMessage="Missing or invalid token")
@@ -61,33 +57,21 @@ def validate_serial():
 
     try:
         data = request.get_json()
-        required_fields = ["materialCode", "serialNumber", "dealerCode"]
-        if not all(field in data for field in required_fields):
-            return jsonify(responseStatus="-99", responseMessage="Missing required fields")
+        if "serialNumber" not in data:
+            return jsonify(responseStatus="-99", responseMessage="Missing serial number")
 
         serial = data["serialNumber"]
-        material = data["materialCode"]
-        dealer = data["dealerCode"]
-
         rows = sheet.get_all_records()
 
         for row in rows:
             if row["serialNumber"] == serial:
-                if row["materialCode"] != material:
-                    return jsonify(responseStatus="-2", responseMessage="Mismatch in model and serial number")
-                if row["dealerCode"] != dealer:
-                    return jsonify(responseStatus="-6", responseMessage="Serial number is not billed to this Dealer")
+                row_index = rows.index(row) + 2  # +2 because 1st row is header
                 if row["isValidated"].lower() == "yes":
                     return jsonify(responseStatus="-3", responseMessage="Serial Number Already Validated")
 
-                # ✅ Update the sheet with Yes and timestamp
-                try:
-                    row_index = rows.index(row) + 2  # +2 because gspread is 1-based and first row is header
-                    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    sheet.update_cell(row_index, 4, "Yes")           # isValidated
-                    sheet.update_cell(row_index, 5, current_time)    # validatedAt
-                except Exception as e:
-                    print("Sheet update error:", e)
+                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                sheet.update_cell(row_index, 2, "Yes")           # isValidated (column 2)
+                sheet.update_cell(row_index, 3, current_time)    # validatedAt (column 3)
 
                 return jsonify(responseStatus="0", responseMessage="Valid Serial Number")
 
