@@ -61,7 +61,7 @@ def validate_serial():
 
     try:
         data = request.get_json()
-        required_fields = ["materialCode", "serialNumber", "dealerCode", "accessKey"]
+        required_fields = ["materialCode", "serialNumber", "dealerCode"]
         if not all(field in data for field in required_fields):
             return jsonify(responseStatus="-99", responseMessage="Missing required fields")
 
