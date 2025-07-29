@@ -4,8 +4,7 @@ from flask import Flask, request, jsonify
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from datetime import datetime
-import pytz  # ✅ For Indian time
+from datetime import datetime, timedelta, timezone
 
 # === Flask Setup ===
 app = Flask(__name__)
@@ -26,7 +25,7 @@ sheet = client.open("SI-SR-Validation").sheet1  # ✅ Sheet name
 
 @app.route('/')
 def home():
-    return "🎉 Pillow Serial Checker is LIVE with IST time!"
+    return "🎉 Pillow Serial Checker is LIVE with correct IST time!"
 
 @app.route('/generateToken', methods=['POST'])
 def generate_token():
@@ -70,20 +69,20 @@ def validate_serial():
             if row["serialNumber"] == serial:
                 row_index = i + 2  # +2 = 1 for header + 1 for zero-based index
 
-                # ✅ Allow only rows 2–6 (test rows)
+                # ✅ Allow only first 5 rows (row 2–6)
                 if row_index > 6:
                     return jsonify(responseStatus="-7", responseMessage="This serial number is locked for testing")
 
                 if row["isValidated"].lower() == "yes":
                     return jsonify(responseStatus="-3", responseMessage="Serial Number Already Validated")
 
-                # ✅ Get current IST time
-                ist = pytz.timezone('Asia/Kolkata')
-                current_time = datetime.now(ist).strftime('%Y-%m-%d %H:%M:%S')
+                # ✅ Get current time in Indian Standard Time (IST)
+                IST = timezone(timedelta(hours=5, minutes=30))
+                current_time = datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')
 
-                # ✅ Update isValidated and validatedAt
-                sheet.update_cell(row_index, 2, "Yes")
-                sheet.update_cell(row_index, 3, current_time)
+                # ✅ Update the sheet
+                sheet.update_cell(row_index, 2, "Yes")           # isValidated (column 2)
+                sheet.update_cell(row_index, 3, current_time)    # validatedAt (column 3)
 
                 return jsonify(responseStatus="0", responseMessage="Valid Serial Number")
 
