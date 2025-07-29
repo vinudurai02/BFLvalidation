@@ -5,6 +5,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from datetime import datetime
+import pytz 
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("API_SECRET_KEY", "supersecretkey123")
@@ -68,8 +69,8 @@ def validate_serial():
                 row_index = rows.index(row) + 2  # +2 because 1st row is header
                 if row["isValidated"].lower() == "yes":
                     return jsonify(responseStatus="-3", responseMessage="Serial Number Already Validated")
-
-                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+		ist = pytz.timezone('Asia/Kolkata')
+		current_time = datetime.now(ist).strftime('%Y-%m-%d %H:%M:%S')
                 sheet.update_cell(row_index, 2, "Yes")           # isValidated (column 2)
                 sheet.update_cell(row_index, 3, current_time)    # validatedAt (column 3)
 
