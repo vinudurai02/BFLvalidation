@@ -5,27 +5,28 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from datetime import datetime
-import pytz 
+import pytz  # ✅ For Indian time
 
+# === Flask Setup ===
 app = Flask(__name__)
 app.secret_key = os.environ.get("API_SECRET_KEY", "supersecretkey123")
 serializer = URLSafeTimedSerializer(app.secret_key)
 
-# BFL login
+# === BFL Credentials ===
 VALID_USERNAME = os.environ.get("BFL_USERNAME", "bfluser")
 VALID_PASSWORD = os.environ.get("BFL_PASSWORD", "bflpass")
 
-# Connect to Google Sheet
+# === Google Sheet Connection ===
 cred_json = os.environ.get("GOOGLE_SHEET_CREDENTIALS")
 cred_dict = json.loads(cred_json)
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(cred_dict, scope)
 client = gspread.authorize(creds)
-sheet = client.open("SI-SR-Validation").sheet1
+sheet = client.open("SI-SR-Validation").sheet1  # ✅ Sheet name
 
 @app.route('/')
 def home():
-    return "🎉 Pillow EMI Serial Checker is live!"
+    return "🎉 Pillow Serial Checker is LIVE with IST time!"
 
 @app.route('/generateToken', methods=['POST'])
 def generate_token():
@@ -48,6 +49,7 @@ def verify_token(token):
 
 @app.route('/ValidateSrNo', methods=['POST'])
 def validate_serial():
+    # ✅ Token check
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         return jsonify(responseStatus="-403", responseMessage="Missing or invalid token")
@@ -64,15 +66,24 @@ def validate_serial():
         serial = data["serialNumber"]
         rows = sheet.get_all_records()
 
-        for row in rows:
+        for i, row in enumerate(rows):
             if row["serialNumber"] == serial:
-                row_index = rows.index(row) + 2  # +2 because 1st row is header
+                row_index = i + 2  # +2 = 1 for header + 1 for zero-based index
+
+                # ✅ Allow only rows 2–6 (test rows)
+                if row_index > 6:
+                    return jsonify(responseStatus="-7", responseMessage="This serial number is locked for testing")
+
                 if row["isValidated"].lower() == "yes":
                     return jsonify(responseStatus="-3", responseMessage="Serial Number Already Validated")
-		ist = pytz.timezone('Asia/Kolkata')
-		current_time = datetime.now(ist).strftime('%Y-%m-%d %H:%M:%S')
-                sheet.update_cell(row_index, 2, "Yes")           # isValidated (column 2)
-                sheet.update_cell(row_index, 3, current_time)    # validatedAt (column 3)
+
+                # ✅ Get current IST time
+                ist = pytz.timezone('Asia/Kolkata')
+                current_time = datetime.now(ist).strftime('%Y-%m-%d %H:%M:%S')
+
+                # ✅ Update isValidated and validatedAt
+                sheet.update_cell(row_index, 2, "Yes")
+                sheet.update_cell(row_index, 3, current_time)
 
                 return jsonify(responseStatus="0", responseMessage="Valid Serial Number")
 
