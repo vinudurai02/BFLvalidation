@@ -69,9 +69,7 @@ def validate_serial():
             if row["serialNumber"] == serial:
                 row_index = i + 2  # +2 = 1 for header + 1 for zero-based index
 
-                # ✅ Allow only first 5 rows (row 2–6)
-                if row_index > 6:
-                    return jsonify(responseStatus="-7", responseMessage="This serial number is locked for testing")
+                # 🔧 Removed the previous test lock that restricted to the first 5 rows
 
                 if row["isValidated"].lower() == "yes":
                     return jsonify(responseStatus="-3", responseMessage="Serial Number Already Validated")
